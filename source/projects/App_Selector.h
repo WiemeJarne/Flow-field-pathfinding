@@ -6,9 +6,10 @@
 //#define ActiveApp_Steering
 //#define ActiveApp_CombinedSteering
 //#define ActiveApp_Flocking
-#define ActiveApp_GraphTheory
+//#define ActiveApp_GraphTheory
 //#define ActiveApp_PathfindingAStar
 //#define ActiveApp_NavMeshGraph
+#define ActiveAppFlowFields
 
 //---------- Registered Applications -----------
 #ifdef ActiveApp_Sandbox
@@ -44,6 +45,11 @@ typedef App_PathfindingAStar CurrentApp;
 #ifdef ActiveApp_NavMeshGraph
 #include "projects/Movement/Pathfinding/NavMeshGraph/App_NavMeshGraph.h"
 typedef App_NavMeshGraph CurrentApp;
+#endif
+
+#ifdef ActiveAppFlowFields
+#include "projects/Movement/Pathfinding/FlowFields/App_FlowFields.h"
+typedef App_FlowFields CurrentApp;
 #endif
 
 class App_Selector {

@@ -37,6 +37,7 @@
     <ClCompile Include="framework\EliteAI\EliteGraphs\ENavGraph.cpp" />
     <ClCompile Include="projects\Movement\Pathfinding\NavMeshGraph\App_NavMeshGraph.cpp" />
     <ClCompile Include="projects\Shared\NavigationColliderElement.cpp" />
+    <ClCompile Include="projects\Movement\Pathfinding\FlowFields\App_FlowFields.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="projects\App_Selector.h" />
@@ -119,6 +120,7 @@
     <ClInclude Include="framework\EliteAI\EliteNavigation\Algorithms\EPathSmoothing.h" />
     <ClInclude Include="projects\Movement\Pathfinding\NavMeshGraph\App_NavMeshGraph.h" />
     <ClInclude Include="projects\Shared\NavigationColliderElement.h" />
+    <ClInclude Include="projects\Movement\Pathfinding\FlowFields\App_FlowFields.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="imgui.ini" />
