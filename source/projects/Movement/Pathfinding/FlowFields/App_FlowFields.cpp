@@ -3,10 +3,17 @@
 
 //Includes
 #include "App_FlowFields.h"
+#include "projects/Movement/SteeringBehaviors/SteeringAgent.h"
 
 //Destructor
 App_FlowFields::~App_FlowFields()
 {
+	/*for (auto pAgent : m_Agents)
+	{
+		SAFE_DELETE(pAgent)
+	}
+	m_Agents.clear();*/
+
 	SAFE_DELETE(m_pGridGraph);
 	SAFE_DELETE(m_pGraphRenderer);
 }
@@ -14,12 +21,28 @@ App_FlowFields::~App_FlowFields()
 //Functions
 void App_FlowFields::Start()
 {
+	srand(time(nullptr));
+
 	m_pGraphRenderer = new Elite::GraphRenderer();
+	m_WorldSize = COLUMNS * static_cast<float>(m_CellSize);
+
+	//Create the agents
+	Vector2 randomPos{};
+	for (int index{}; index < m_AmountOfAgents; ++index)
+	{
+		m_Agents.push_back(new SteeringAgent());
+		m_Agents[index]->SetMaxLinearSpeed(25.f);
+		m_Agents[index]->SetMass(0.f);
+		m_Agents[index]->SetAutoOrient(true);
+		randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
+		randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
+		m_Agents[index]->SetPosition(randomPos);
+	}
 
 	//Initialization of the application. If you want access to the physics world you will need to store it yourself.
 	//----------- CAMERA ------------
-	DEBUGRENDERER2D->GetActiveCamera()->SetZoom(80.f);
-	DEBUGRENDERER2D->GetActiveCamera()->SetCenter(Elite::Vector2(0.f, 0.f));
+	DEBUGRENDERER2D->GetActiveCamera()->SetZoom(135.0f);
+	DEBUGRENDERER2D->GetActiveCamera()->SetCenter(Elite::Vector2(m_WorldSize / 1.5f, m_WorldSize / 2));
 	DEBUGRENDERER2D->GetActiveCamera()->SetMoveLocked(false);
 	DEBUGRENDERER2D->GetActiveCamera()->SetZoomLocked(false);
 
@@ -29,15 +52,17 @@ void App_FlowFields::Start()
 	//set all the cost in the costField to 1
 	//fill the integrationField with a high number
 	//fill the vectorField
-	for (int index{}; index < ROWS; ++index)
+	for (int rowNr{}; rowNr < ROWS; ++rowNr)
 	{
-		for (int index{}; index < COLUMNS; ++index)
+		for (int colNr{}; colNr < COLUMNS; ++colNr)
 		{
-			m_CostField.push_back(1);
+			//m_CostField.push_back(1);
 			m_IntegrationField.push_back(1000);
 			m_VectorField.push_back(VectorDirection::none);
 		}
 	}
+
+	//m_CostField[252] = 255;
 }
 
 void App_FlowFields::Update(float deltaTime)
@@ -45,11 +70,82 @@ void App_FlowFields::Update(float deltaTime)
 	//INPUT
 	HandleInput();
 
-	CalculateIntegrationField();
-	CalculateVectorField();
+	//Update agents
+	for (const auto& agent : m_Agents)
+	{
+		agent->Update(deltaTime);
+		agent->TrimToWorld(m_WorldSize);
+		const auto nodeIndex{ m_pGridGraph->GetNodeIdxAtWorldPos(agent->GetPosition()) };
+
+		if (nodeIndex == invalid_node_index) continue;
+
+		switch (m_VectorField[nodeIndex])
+		{
+		case VectorDirection::none:
+			agent->SetLinearVelocity(Vector2(0.f, 0.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::top:
+			agent->SetLinearVelocity(Vector2(0.f, 1.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::topRight:
+			agent->SetLinearVelocity(Vector2(1.f, 1.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::right:
+			agent->SetLinearVelocity(Vector2(1.f, 0.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::bottomRight:
+			agent->SetLinearVelocity(Vector2(1.f, -1.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::bottom:
+			agent->SetLinearVelocity(Vector2(0.f, -1.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::bottomLeft:
+			agent->SetLinearVelocity(Vector2(-1.f, -1.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::Left:
+			agent->SetLinearVelocity(Vector2(-1.f, 0.f) * agent->GetMaxLinearSpeed());
+			break;
+
+		case VectorDirection::topLeft:
+			agent->SetLinearVelocity(Vector2(-1.f, 1.f) * agent->GetMaxLinearSpeed());
+			break;
+		}
+	}
 
 	//UI
 	UpdateImGui();
+
+	if (m_AmountOfAgents != m_PreviousAmountOfAgents)
+	{
+		for (auto pAgent : m_Agents)
+		{
+			SAFE_DELETE(pAgent)
+		}
+		m_Agents.clear();
+
+		//Create the agents
+		Vector2 randomPos{};
+		for (int index{}; index < m_AmountOfAgents; ++index)
+		{
+			m_Agents.push_back(new SteeringAgent());
+			m_Agents[index]->SetMaxLinearSpeed(15.f);
+			m_Agents[index]->SetMass(0.f);
+			m_Agents[index]->SetAutoOrient(true);
+			randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
+			randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
+			m_Agents[index]->SetPosition(randomPos);
+			m_Agents[index]->SetRenderBehavior(true);
+		}
+	}
+
+	m_PreviousAmountOfAgents = m_AmountOfAgents;
 }
 
 void App_FlowFields::Render(float deltaTime) const
@@ -169,10 +265,11 @@ void App_FlowFields::UpdateImGui()
 
 		ImGui::Checkbox("Grid", &m_DebugSettings.DrawNodes);
 		ImGui::Checkbox("Connections", &m_DebugSettings.DrawConnections);
-		ImGui::Checkbox("Connections Costs", &m_DebugSettings.DrawConnectionCosts);
 		ImGui::Checkbox("CostField", &m_DebugSettings.DrawCostField);
 		ImGui::Checkbox("IntegrationField", &m_DebugSettings.DrawIntegrationField);
 		ImGui::Checkbox("VectorField", &m_DebugSettings.DrawVectorField);
+		
+		ImGui::SliderInt("Agents", &m_AmountOfAgents, 0, 2000);
 
 		//End
 		ImGui::PopAllowKeyboardFocus();
@@ -218,9 +315,9 @@ void App_FlowFields::CalculateIntegrationField()
 			const int neighborIndex{ connection->GetTo() };
 
 			//Calculate the new cost of the neighbor node
-			int cost{ m_IntegrationField[nodeIndex] + m_CostField[neighborIndex] };
+			//int cost{ m_IntegrationField[nodeIndex] + m_CostField[neighborIndex] };
 			
-			if (cost < m_IntegrationField[neighborIndex])
+		//	if (cost < m_IntegrationField[neighborIndex])
 			{
 				//check if the neighbor is already in the openList if not add it
 				bool neighborIsInOpenList{ false };
@@ -239,7 +336,7 @@ void App_FlowFields::CalculateIntegrationField()
 				}
 
 				//Set the cost of the neighbor
-				m_IntegrationField[neighborIndex] = cost;
+				//m_IntegrationField[neighborIndex] = cost;
 			}
 		}
 	}
@@ -304,6 +401,12 @@ void App_FlowFields::CalculateVectorField()
 			}
 		}
 	}
+
+	//set the direction of the destination node to zero
+	if (m_DestinationNodeIndex != invalid_node_index)
+	{
+		m_VectorField[m_DestinationNodeIndex] = VectorDirection::none;
+	}
 }
 
 void App_FlowFields::HandleInput()
@@ -319,9 +422,15 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 
-		if (m_CostField[indexclosestNode] + 1 < 255)
+	//	if (m_CostField[indexclosestNode] + 1 < 256)
 		{
-			++m_CostField[indexclosestNode];
+		//	++m_CostField[indexclosestNode];
+		//	if (m_CostField[indexclosestNode] == 255)
+			{
+				//m_pGridGraph->RemoveConnectionsToAdjacentNodes(indexclosestNode);
+			}
+			CalculateIntegrationField();
+			CalculateVectorField();
 		}
 	}
 
@@ -336,9 +445,16 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 
-		if (m_CostField[indexclosestNode] - 1 > 0)
+		//if (m_CostField[indexclosestNode] - 1 > 0)
 		{
-			--m_CostField[indexclosestNode];
+		//	if (m_CostField[indexclosestNode] == 255)
+			{
+				m_pGridGraph->AddConnectionsToAdjacentCells(indexclosestNode);
+			}
+
+		//	--m_CostField[indexclosestNode];
+			CalculateIntegrationField();
+			CalculateVectorField();
 		}
 	}
 
@@ -354,6 +470,8 @@ void App_FlowFields::HandleInput()
 		if (indexclosestNode == invalid_node_index) return;
 		
 		m_DestinationNodeIndex = indexclosestNode;
+		CalculateIntegrationField();
+		CalculateVectorField();
 	}
 }
 

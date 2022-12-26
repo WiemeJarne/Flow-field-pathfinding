@@ -5,6 +5,8 @@
 
 using namespace Elite;
 
+class SteeringAgent;
+
 class App_FlowFields : public IApp
 {
 public:
@@ -43,15 +45,20 @@ private:
 	};
 
 	//Grid datamembers
-	static const int COLUMNS = 20;
-	static const int ROWS = 10;
-	unsigned int m_CellSize = 20;
+	static const int COLUMNS = 50;
+	static const int ROWS = 50;
+	unsigned int m_CellSize = 5;
 	Elite::GridGraph<Elite::GridTerrainNode, Elite::GraphConnection>* m_pGridGraph;
 	std::vector<int> m_CostField;
 	std::vector<int> m_IntegrationField;
 	std::vector<VectorDirection> m_VectorField;
 
 	int m_DestinationNodeIndex{ invalid_node_index };
+
+	int m_AmountOfAgents = 2000;
+	int m_PreviousAmountOfAgents;
+	std::vector<SteeringAgent*> m_Agents;
+	float m_WorldSize = 0.f;
 
 	//Visualisation
 	Elite::GraphRenderer* m_pGraphRenderer{ nullptr };
