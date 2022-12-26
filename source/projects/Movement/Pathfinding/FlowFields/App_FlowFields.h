@@ -24,13 +24,34 @@ private:
 		bool DrawNodeNumbers{ false };
 		bool DrawConnections{ false };
 		bool DrawConnectionCosts{ false };
+		bool DrawCostField{ false };
+		bool DrawIntegrationField{ false };
+		bool DrawVectorField{ false };
+	};
+
+	enum class VectorDirection
+	{
+		none,
+		top,
+		topRight,
+		right,
+		bottomRight,
+		bottom,
+		bottomLeft,
+		Left,
+		topLeft
 	};
 
 	//Grid datamembers
 	static const int COLUMNS = 20;
 	static const int ROWS = 10;
-	unsigned int m_SizeCell = 15;
+	unsigned int m_CellSize = 20;
 	Elite::GridGraph<Elite::GridTerrainNode, Elite::GraphConnection>* m_pGridGraph;
+	std::vector<int> m_CostField;
+	std::vector<int> m_IntegrationField;
+	std::vector<VectorDirection> m_VectorField;
+
+	int m_DestinationNodeIndex{ invalid_node_index };
 
 	//Visualisation
 	Elite::GraphRenderer* m_pGraphRenderer{ nullptr };
@@ -41,6 +62,10 @@ private:
 	//Functions
 	void MakeGridGraph();
 	void UpdateImGui();
+	void CalculateIntegrationField();
+	void CalculateVectorField();
+	void HandleInput();
+	void DrawArrow(Vector2 cellPos, VectorDirection direction) const;
 
 	App_FlowFields(const App_FlowFields&) = delete;
 	App_FlowFields& operator=(const App_FlowFields&) = delete;
