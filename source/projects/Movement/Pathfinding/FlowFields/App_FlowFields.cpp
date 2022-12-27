@@ -4,15 +4,16 @@
 //Includes
 #include "App_FlowFields.h"
 #include "projects/Movement/SteeringBehaviors/SteeringAgent.h"
+#include "projects/Shared/NavigationColliderElement.h"
 
 //Destructor
 App_FlowFields::~App_FlowFields()
 {
-	/*for (auto pAgent : m_Agents)
+	for (auto pAgent : m_Agents)
 	{
 		SAFE_DELETE(pAgent)
 	}
-	m_Agents.clear();*/
+	m_Agents.clear();
 
 	SAFE_DELETE(m_pGridGraph);
 	SAFE_DELETE(m_pGraphRenderer);
@@ -21,10 +22,11 @@ App_FlowFields::~App_FlowFields()
 //Functions
 void App_FlowFields::Start()
 {
-	srand(time(nullptr));
-
 	m_pGraphRenderer = new Elite::GraphRenderer();
-	m_WorldSize = COLUMNS * static_cast<float>(m_CellSize);
+	m_WorldWidth = m_AmountOfColumns * static_cast<float>(m_CellSize);
+	m_WorldHeight = m_AmountOfRows * static_cast<float>(m_CellSize);
+
+	DetermineWorldPoints();
 
 	//Create the agents
 	Vector2 randomPos{};
@@ -34,15 +36,14 @@ void App_FlowFields::Start()
 		m_Agents[index]->SetMaxLinearSpeed(25.f);
 		m_Agents[index]->SetMass(0.f);
 		m_Agents[index]->SetAutoOrient(true);
-		randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
-		randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
-		m_Agents[index]->SetPosition(randomPos);
+		randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldWidth));
+		randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldHeight));
 	}
 
 	//Initialization of the application. If you want access to the physics world you will need to store it yourself.
 	//----------- CAMERA ------------
 	DEBUGRENDERER2D->GetActiveCamera()->SetZoom(135.0f);
-	DEBUGRENDERER2D->GetActiveCamera()->SetCenter(Elite::Vector2(m_WorldSize / 1.5f, m_WorldSize / 2));
+	DEBUGRENDERER2D->GetActiveCamera()->SetCenter(Elite::Vector2(m_WorldWidth / 1.5f, m_WorldHeight / 2));
 	DEBUGRENDERER2D->GetActiveCamera()->SetMoveLocked(false);
 	DEBUGRENDERER2D->GetActiveCamera()->SetZoomLocked(false);
 
@@ -52,17 +53,17 @@ void App_FlowFields::Start()
 	//set all the cost in the costField to 1
 	//fill the integrationField with a high number
 	//fill the vectorField
-	for (int rowNr{}; rowNr < ROWS; ++rowNr)
+	for (int rowNr{}; rowNr < m_AmountOfRows; ++rowNr)
 	{
-		for (int colNr{}; colNr < COLUMNS; ++colNr)
+		for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 		{
-			//m_CostField.push_back(1);
+			m_CostField.push_back(1);
 			m_IntegrationField.push_back(1000);
 			m_VectorField.push_back(VectorDirection::none);
 		}
 	}
 
-	//m_CostField[252] = 255;
+	m_DestinationNodeIndex = m_AmountOfRows / 2 * m_AmountOfColumns + m_AmountOfColumns / 2;
 }
 
 void App_FlowFields::Update(float deltaTime)
@@ -74,7 +75,8 @@ void App_FlowFields::Update(float deltaTime)
 	for (const auto& agent : m_Agents)
 	{
 		agent->Update(deltaTime);
-		agent->TrimToWorld(m_WorldSize);
+		agent->TrimToWorld({0.f, 0.f}, {m_WorldWidth, m_WorldHeight});
+
 		const auto nodeIndex{ m_pGridGraph->GetNodeIdxAtWorldPos(agent->GetPosition()) };
 
 		if (nodeIndex == invalid_node_index) continue;
@@ -138,19 +140,53 @@ void App_FlowFields::Update(float deltaTime)
 			m_Agents[index]->SetMaxLinearSpeed(15.f);
 			m_Agents[index]->SetMass(0.f);
 			m_Agents[index]->SetAutoOrient(true);
-			randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
-			randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldSize));
+			randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldWidth));
+			randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldHeight));
 			m_Agents[index]->SetPosition(randomPos);
 			m_Agents[index]->SetRenderBehavior(true);
 		}
+
+		m_PreviousAmountOfAgents = m_AmountOfAgents;
 	}
 
-	m_PreviousAmountOfAgents = m_AmountOfAgents;
+	if (m_AmountOfColumns != m_PreviousAmountOfColumns || m_AmountOfRows != m_PreviousAmountOfRows || m_CellSize != m_PreviousCellSize)
+	{
+		//delete the existing grid and make a new grid
+		SAFE_DELETE(m_pGridGraph);
+		MakeGridGraph();
+
+		m_PreviousAmountOfColumns = m_AmountOfColumns;
+		m_PreviousAmountOfRows = m_AmountOfRows;
+		m_PreviousCellSize = m_CellSize;
+
+		//reset all the fields
+		m_CostField.resize(m_AmountOfColumns * m_AmountOfRows);
+		for (int& cost : m_CostField)
+		{
+			cost = 1;
+		}
+
+		m_IntegrationField.resize(m_AmountOfColumns * m_AmountOfRows);
+		for (int& cost : m_IntegrationField)
+		{
+			cost = 1000;
+		}
+
+		m_VectorField.resize(m_AmountOfColumns * m_AmountOfRows);
+
+		//recalculate the IntegrationField and VectorField
+		CalculateIntegrationField();
+		CalculateVectorField();
+
+		//change the world datamembers
+		m_WorldWidth = static_cast<float>(m_CellSize) * m_AmountOfColumns;
+		m_WorldHeight = static_cast<float>(m_CellSize) * m_AmountOfRows;
+		DetermineWorldPoints();
+	}
 }
 
 void App_FlowFields::Render(float deltaTime) const
 {
-	UNREFERENCED_PARAMETER(deltaTime);
 	//Render grid
 	m_pGraphRenderer->RenderGraph(m_pGridGraph, m_DebugSettings.DrawNodes, m_DebugSettings.DrawNodeNumbers, m_DebugSettings.DrawConnections, m_DebugSettings.DrawConnectionCosts);
 
@@ -159,11 +195,11 @@ void App_FlowFields::Render(float deltaTime) const
 	{
 		Vector2 textPos{1.f, static_cast<float>(m_CellSize) };
 
-		for (int rowNr{}; rowNr < ROWS; ++rowNr)
+		for (int rowNr{}; rowNr < m_AmountOfRows; ++rowNr)
 		{
-			for (int colNr{}; colNr < COLUMNS; ++colNr)
+			for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 			{
-				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_CostField[rowNr * COLUMNS + colNr]).c_str());
+				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_CostField[rowNr * m_AmountOfColumns + colNr]).c_str());
 				textPos.x += m_CellSize;
 			}
 			textPos.y += m_CellSize;
@@ -176,11 +212,11 @@ void App_FlowFields::Render(float deltaTime) const
 	{
 		Vector2 textPos{ static_cast<float>(m_CellSize) - 3, static_cast<float>(m_CellSize) };
 
-		for (int rowNr{}; rowNr < ROWS; ++rowNr)
+		for (int rowNr{}; rowNr < m_AmountOfRows; ++rowNr)
 		{
-			for (int colNr{}; colNr < COLUMNS; ++colNr)
+			for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 			{
-				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_IntegrationField[rowNr * COLUMNS + colNr]).c_str());
+				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_IntegrationField[rowNr * m_AmountOfColumns + colNr]).c_str());
 				textPos.x += m_CellSize;
 			}
 			textPos.y += m_CellSize;
@@ -193,11 +229,11 @@ void App_FlowFields::Render(float deltaTime) const
 	{
 		Vector2 textPos{ 1.f,  5.f };
 
-		for (int rowNr{}; rowNr < ROWS; ++rowNr)
+		for (int rowNr{}; rowNr < m_AmountOfRows; ++rowNr)
 		{
-			for (int colNr{}; colNr < COLUMNS; ++colNr)
+			for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 			{
-				DrawArrow(m_pGridGraph->GetNodeWorldPos(rowNr * COLUMNS + colNr), m_VectorField[rowNr * COLUMNS + colNr]);
+				DrawArrow(m_pGridGraph->GetNodeWorldPos(rowNr * m_AmountOfColumns + colNr), m_VectorField[rowNr * m_AmountOfColumns + colNr]);
 				textPos.x += m_CellSize;
 			}
 			textPos.y += m_CellSize;
@@ -210,11 +246,14 @@ void App_FlowFields::Render(float deltaTime) const
 	{
 		m_pGraphRenderer->HighlightNodes(m_pGridGraph, { m_pGridGraph->GetNode(m_DestinationNodeIndex) }, START_NODE_COLOR);
 	}
+
+	//Render world bounds
+	DEBUGRENDERER2D->DrawPolygon(&Elite::Polygon(m_WorldPoints), Color(1.f, 1.f, 1.f));
 }
 
 void App_FlowFields::MakeGridGraph()
 {
-	m_pGridGraph = new GridGraph<GridTerrainNode, GraphConnection>(COLUMNS, ROWS, m_CellSize, true, true, 1.f, 1.5f);
+	m_pGridGraph = new GridGraph<GridTerrainNode, GraphConnection>(m_AmountOfColumns, m_AmountOfRows, m_CellSize, true, true, 1.f, 1.5f);
 }
 
 void App_FlowFields::UpdateImGui()
@@ -239,8 +278,17 @@ void App_FlowFields::UpdateImGui()
 		ImGui::Indent();
 		ImGui::Unindent();
 
-		ImGui::Text("LMB: increase cost");
-		ImGui::Text("RMB: decrease cost");
+		if (m_DebugSettings.DrawCostField)
+		{
+			ImGui::Text("LMB: increase cost");
+			ImGui::Text("RMB: decrease cost");
+		}
+		else
+		{
+			ImGui::Text("LMB: add wall");
+			ImGui::Text("RMB: remove wall");
+		}
+
 		ImGui::Text("MMB: set destination");		
 
 		ImGui::Spacing();
@@ -270,6 +318,9 @@ void App_FlowFields::UpdateImGui()
 		ImGui::Checkbox("VectorField", &m_DebugSettings.DrawVectorField);
 		
 		ImGui::SliderInt("Agents", &m_AmountOfAgents, 0, 2000);
+		ImGui::SliderInt("Columns", &m_AmountOfColumns, 5, 50);
+		ImGui::SliderInt("Rows", &m_AmountOfRows, 5, 50);
+		ImGui::SliderInt("CellSize", &m_CellSize, 1, 25);
 
 		//End
 		ImGui::PopAllowKeyboardFocus();
@@ -315,9 +366,9 @@ void App_FlowFields::CalculateIntegrationField()
 			const int neighborIndex{ connection->GetTo() };
 
 			//Calculate the new cost of the neighbor node
-			//int cost{ m_IntegrationField[nodeIndex] + m_CostField[neighborIndex] };
+			int cost{ m_IntegrationField[nodeIndex] + m_CostField[neighborIndex] };
 			
-		//	if (cost < m_IntegrationField[neighborIndex])
+			if (cost < m_IntegrationField[neighborIndex])
 			{
 				//check if the neighbor is already in the openList if not add it
 				bool neighborIsInOpenList{ false };
@@ -336,7 +387,7 @@ void App_FlowFields::CalculateIntegrationField()
 				}
 
 				//Set the cost of the neighbor
-				//m_IntegrationField[neighborIndex] = cost;
+				m_IntegrationField[neighborIndex] = cost;
 			}
 		}
 	}
@@ -363,11 +414,11 @@ void App_FlowFields::CalculateVectorField()
 		//set the correct direction of the current node
 		if (cheapestNeighborIndex != invalid_node_index && cheapestNeighborCost != 1000)
 		{
-			if (cheapestNeighborIndex == index + COLUMNS)
+			if (cheapestNeighborIndex == index + m_AmountOfColumns)
 			{
 				m_VectorField[index] = VectorDirection::top;
 			}
-			else if (cheapestNeighborIndex == index + COLUMNS + 1)
+			else if (cheapestNeighborIndex == index + m_AmountOfColumns + 1)
 			{
 				m_VectorField[index] = VectorDirection::topRight;
 			}
@@ -375,15 +426,15 @@ void App_FlowFields::CalculateVectorField()
 			{
 				m_VectorField[index] = VectorDirection::right;
 			}
-			else if (cheapestNeighborIndex == index - COLUMNS + 1)
+			else if (cheapestNeighborIndex == index - m_AmountOfColumns + 1)
 			{
 				m_VectorField[index] = VectorDirection::bottomRight;
 			}
-			else if (cheapestNeighborIndex == index - COLUMNS)
+			else if (cheapestNeighborIndex == index - m_AmountOfColumns)
 			{
 				m_VectorField[index] = VectorDirection::bottom;
 			}
-			else if (cheapestNeighborIndex == index - COLUMNS - 1)
+			else if (cheapestNeighborIndex == index - m_AmountOfColumns - 1)
 			{
 				m_VectorField[index] = VectorDirection::bottomLeft;
 			}
@@ -391,7 +442,7 @@ void App_FlowFields::CalculateVectorField()
 			{
 				m_VectorField[index] = VectorDirection::Left;
 			}
-			else if (cheapestNeighborIndex == index + COLUMNS - 1)
+			else if (cheapestNeighborIndex == index + m_AmountOfColumns - 1)
 			{
 				m_VectorField[index] = VectorDirection::topLeft;
 			}
@@ -402,10 +453,18 @@ void App_FlowFields::CalculateVectorField()
 		}
 	}
 
-	//set the direction of the destination node to zero
+	//set the direction of the destination node and all the walls to zero
 	if (m_DestinationNodeIndex != invalid_node_index)
 	{
 		m_VectorField[m_DestinationNodeIndex] = VectorDirection::none;
+	}
+
+	for (int index{}; index < m_CostField.size(); ++index)
+	{
+		if (m_CostField[index] == 255)
+		{
+			m_VectorField[index] = VectorDirection::none;
+		}
 	}
 }
 
@@ -422,15 +481,22 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 
-	//	if (m_CostField[indexclosestNode] + 1 < 256)
+		if (m_CostField[indexclosestNode] + 1 < 256 && m_DebugSettings.DrawCostField == true)
 		{
-		//	++m_CostField[indexclosestNode];
-		//	if (m_CostField[indexclosestNode] == 255)
-			{
-				//m_pGridGraph->RemoveConnectionsToAdjacentNodes(indexclosestNode);
-			}
+			++m_CostField[indexclosestNode];
+			
 			CalculateIntegrationField();
 			CalculateVectorField();
+		}
+		else
+		{
+			m_CostField[indexclosestNode] = 255;
+		}
+
+		if (m_CostField[indexclosestNode] == 255)
+		{
+			m_pGridGraph->RemoveConnectionsToAdjacentNodes(indexclosestNode);
+			AddWall(m_pGridGraph->GetNodeWorldPos(indexclosestNode));
 		}
 	}
 
@@ -445,16 +511,32 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 
-		//if (m_CostField[indexclosestNode] - 1 > 0)
+		if (m_CostField[indexclosestNode] - 1 > 0 && m_DebugSettings.DrawCostField)
 		{
-		//	if (m_CostField[indexclosestNode] == 255)
-			{
-				m_pGridGraph->AddConnectionsToAdjacentCells(indexclosestNode);
-			}
-
-		//	--m_CostField[indexclosestNode];
+			--m_CostField[indexclosestNode];
 			CalculateIntegrationField();
 			CalculateVectorField();
+		}
+		else
+		{
+			const Vector2 nodePos{ m_pGridGraph->GetNodeWorldPos(indexclosestNode) };
+
+			//loop over the walls and check if the player clicked on a wall if so delete the wall and set the cost to 1
+			for (auto& wall : m_vNavigationColliders)
+			{
+				if (wall->GetPosition() == nodePos)
+				{
+					SAFE_DELETE(wall);
+					m_vNavigationColliders.remove(wall);
+					m_CostField[indexclosestNode] = 1;
+					break;
+				}
+			}
+		}
+
+		if (m_CostField[indexclosestNode] <= 254)
+		{
+			m_pGridGraph->AddConnectionsToAdjacentCells(indexclosestNode);
 		}
 	}
 
@@ -475,12 +557,29 @@ void App_FlowFields::HandleInput()
 	}
 }
 
+void App_FlowFields::AddWall(Vector2 pos)
+{
+	bool wallAlreadyExists{ false };
+	for (const auto& wall : m_vNavigationColliders)
+	{
+		if (wall->GetPosition() == pos)
+		{
+			wallAlreadyExists = true;
+		}
+	}
+
+	if (!wallAlreadyExists)
+	{
+		m_vNavigationColliders.push_back(new NavigationColliderElement(pos, static_cast<float>(m_CellSize), static_cast<float>(m_CellSize)));
+	}
+}
+
 void App_FlowFields::DrawArrow(Vector2 cellMiddle, VectorDirection direction) const
 {
 	Vector2 arrowDirection{};
 	std::vector<Vector2> triangleVertices{};
 	Vector2 triangleStartPoint{};
-	const float triangleSideLenght{ 4 };
+	const float triangleSideLenght{ m_CellSize / 4.f };
 
 	switch (direction)
 	{
@@ -559,8 +658,15 @@ void App_FlowFields::DrawArrow(Vector2 cellMiddle, VectorDirection direction) co
 		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y + triangleSideLenght / 2.f));
 		break;
 	}
+	
+	DEBUGRENDERER2D->DrawPolygon(&Elite::Polygon(triangleVertices), Elite::Color(1.f, 1.f, 1.f));
+}
 
-	
-		DEBUGRENDERER2D->DrawPolygon(&Elite::Polygon(triangleVertices), Elite::Color(1.f, 1.f, 1.f));
-	
+void App_FlowFields::DetermineWorldPoints()
+{
+	m_WorldPoints.clear();
+	m_WorldPoints.push_back({ 0.f, 0.f });
+	m_WorldPoints.push_back({ 0.f, m_WorldHeight });
+	m_WorldPoints.push_back({ m_WorldWidth, m_WorldHeight });
+	m_WorldPoints.push_back({ m_WorldWidth, 0.f });
 }

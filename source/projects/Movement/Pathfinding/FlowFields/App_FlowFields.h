@@ -6,6 +6,7 @@
 using namespace Elite;
 
 class SteeringAgent;
+class NavigationColliderElement;
 
 class App_FlowFields : public IApp
 {
@@ -22,7 +23,7 @@ public:
 private:
 	struct DebugSettings
 	{
-		bool DrawNodes{ true };
+		bool DrawNodes{ false };
 		bool DrawNodeNumbers{ false };
 		bool DrawConnections{ false };
 		bool DrawConnectionCosts{ false };
@@ -44,22 +45,33 @@ private:
 		topLeft
 	};
 
+	std::list<NavigationColliderElement*> m_vNavigationColliders = {};
+
+	//World datamembers
+	std::vector<Vector2> m_WorldPoints;
+	float m_WorldWidth = 0.f;
+	float m_WorldHeight = 0.f;
+
 	//Grid datamembers
-	static const int COLUMNS = 50;
-	static const int ROWS = 50;
-	unsigned int m_CellSize = 5;
+	int m_AmountOfColumns = 25;
+	int m_PreviousAmountOfColumns;
+	int m_AmountOfRows = 25;
+	int m_PreviousAmountOfRows;
+	int m_CellSize = 10;
+	int m_PreviousCellSize;
 	Elite::GridGraph<Elite::GridTerrainNode, Elite::GraphConnection>* m_pGridGraph;
 	std::vector<int> m_CostField;
 	std::vector<int> m_IntegrationField;
 	std::vector<VectorDirection> m_VectorField;
 
+	bool m_AddWalls{ false };
+
 	int m_DestinationNodeIndex{ invalid_node_index };
 
-	int m_AmountOfAgents = 2000;
+	int m_AmountOfAgents = 100;
 	int m_PreviousAmountOfAgents;
 	std::vector<SteeringAgent*> m_Agents;
-	float m_WorldSize = 0.f;
-
+	
 	//Visualisation
 	Elite::GraphRenderer* m_pGraphRenderer{ nullptr };
 
@@ -73,6 +85,8 @@ private:
 	void CalculateVectorField();
 	void HandleInput();
 	void DrawArrow(Vector2 cellPos, VectorDirection direction) const;
+	void AddWall(Vector2 pos);
+	void DetermineWorldPoints();
 
 	App_FlowFields(const App_FlowFields&) = delete;
 	App_FlowFields& operator=(const App_FlowFields&) = delete;

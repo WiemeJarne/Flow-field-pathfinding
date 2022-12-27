@@ -18,6 +18,7 @@ public:
 
 	//--- Functions ---
 	void RenderElement();
+	Elite::Vector2 GetPosition() const { return m_Position; }
 
 private:
 	//--- Datamembers ---
