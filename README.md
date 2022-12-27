@@ -16,6 +16,5 @@ The cost field represents various obstacles on the grid, such as walls or diffic
 Loop over all the cells in the field and determining the cheapest neighbor by looking at the integration field. If a cell is unreachable, it is assigned a zero vector.
 # sources:
 https://www.redblobgames.com/pathfinding/tower-defense/ <br>
-https://www.aaai.org/Papers/AIIDE/2008/AIIDE08-031.pdf <br>
 https://leifnode.com/2013/12/flow-field-pathfinding/ <br>
 https://howtorts.github.io/2014/01/04/basic-flow-fields.html <br>
