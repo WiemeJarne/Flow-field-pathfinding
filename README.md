@@ -1,6 +1,8 @@
 # Flow-field-pathfinding
-# what is a flow field?
-A flow field, also known as a vector field, is a representation of the direction of flow or movement at each point in a given space. Flow fields are commonly used to visualize and analyze the movement of fluids, particles, or objects in a system, and can be used to model a variety of phenomena, including the movement of water in a river, the spread of a gas or vapor, and realistic movement of large crowds.
+# What is a flow field?
+A flow field, also known as a vector field, is a representation of the direction of flow or movement at each point in a given space. 
+# When to use a flow field
+Flow fields are a way to visualize and analyze the movement of substances or objects in a system. They can be used to model a range of phenomena, such as the flow of water in a river or the spread of a gas. Flow fields can be helpful in pathfinding when the environment is constantly changing and the movement of agents needs to be flexible to these changes. They can also be useful when trying to optimize the movement of agents for a specific goal, such as minimizing energy usage or maximizing speed.
 # Calculating the flow field
 ### 1. Create cost field
 The cost field represents various obstacles on the grid, such as walls or difficult terrain like water or mud. Each cell on the grid is assigned a value between 1 and 255, with a default value of 1. Higher values indicate more difficult or impassible terrain, with a value of 255 indicating an impassible cell.
