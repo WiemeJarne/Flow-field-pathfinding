@@ -21,16 +21,23 @@ public:
 	void Render(float deltaTime) const override;
 
 private:
-	struct DebugSettings
-	{
-		bool DrawNodes{ false };
-		bool DrawNodeNumbers{ false };
-		bool DrawConnections{ false };
-		bool DrawConnectionCosts{ false };
-		bool DrawCostField{ false };
-		bool DrawIntegrationField{ false };
-		bool DrawVectorField{ false };
-	};
+	std::list<NavigationColliderElement*> m_Walls;
+
+	//World datamembers
+	std::vector<Vector2> m_WorldPoints;
+	float m_WorldWidth = 0.f;
+	float m_WorldHeight = 0.f;
+
+	//Grid datamembers
+	int m_AmountOfColumns = 15;
+	int m_PreviousAmountOfColumns;
+	int m_AmountOfRows = 15;
+	int m_PreviousAmountOfRows;
+	int m_CellSize = 10;
+	int m_PreviousCellSize;
+	Elite::GridGraph<Elite::GridTerrainNode, Elite::GraphConnection>* m_pGridGraph;
+	std::vector<int> m_CostField;
+	std::vector<int> m_IntegrationField;
 
 	enum class VectorDirection
 	{
@@ -45,23 +52,6 @@ private:
 		topLeft
 	};
 
-	std::list<NavigationColliderElement*> m_vNavigationColliders = {};
-
-	//World datamembers
-	std::vector<Vector2> m_WorldPoints;
-	float m_WorldWidth = 0.f;
-	float m_WorldHeight = 0.f;
-
-	//Grid datamembers
-	int m_AmountOfColumns = 25;
-	int m_PreviousAmountOfColumns;
-	int m_AmountOfRows = 25;
-	int m_PreviousAmountOfRows;
-	int m_CellSize = 10;
-	int m_PreviousCellSize;
-	Elite::GridGraph<Elite::GridTerrainNode, Elite::GraphConnection>* m_pGridGraph;
-	std::vector<int> m_CostField;
-	std::vector<int> m_IntegrationField;
 	std::vector<VectorDirection> m_VectorField;
 
 	bool m_AddWalls{ false };
@@ -76,6 +66,17 @@ private:
 	Elite::GraphRenderer* m_pGraphRenderer{ nullptr };
 
 	//Debug rendering information
+	struct DebugSettings
+	{
+		bool DrawNodes{ false };
+		bool DrawNodeNumbers{ false };
+		bool DrawConnections{ false };
+		bool DrawConnectionCosts{ false };
+		bool DrawCostField{ false };
+		bool DrawIntegrationField{ false };
+		bool DrawVectorField{ false };
+	};
+
 	DebugSettings m_DebugSettings{};
 
 	//Functions
@@ -87,6 +88,7 @@ private:
 	void DrawArrow(Vector2 cellPos, VectorDirection direction) const;
 	void AddWall(Vector2 pos);
 	void DetermineWorldPoints();
+	void ResetFields();
 
 	App_FlowFields(const App_FlowFields&) = delete;
 	App_FlowFields& operator=(const App_FlowFields&) = delete;

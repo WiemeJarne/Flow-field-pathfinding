@@ -9,11 +9,17 @@
 //Destructor
 App_FlowFields::~App_FlowFields()
 {
-	for (auto pAgent : m_Agents)
+	for (auto& pAgent : m_Agents)
 	{
 		SAFE_DELETE(pAgent)
 	}
 	m_Agents.clear();
+
+	for (auto& pWall : m_Walls)
+	{
+		SAFE_DELETE(pWall);
+	}
+	m_Walls.clear();
 
 	SAFE_DELETE(m_pGridGraph);
 	SAFE_DELETE(m_pGraphRenderer);
@@ -23,6 +29,7 @@ App_FlowFields::~App_FlowFields()
 void App_FlowFields::Start()
 {
 	m_pGraphRenderer = new Elite::GraphRenderer();
+
 	m_WorldWidth = m_AmountOfColumns * static_cast<float>(m_CellSize);
 	m_WorldHeight = m_AmountOfRows * static_cast<float>(m_CellSize);
 
@@ -40,8 +47,7 @@ void App_FlowFields::Start()
 		randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldHeight));
 	}
 
-	//Initialization of the application. If you want access to the physics world you will need to store it yourself.
-	//----------- CAMERA ------------
+	//Camera
 	DEBUGRENDERER2D->GetActiveCamera()->SetZoom(135.0f);
 	DEBUGRENDERER2D->GetActiveCamera()->SetCenter(Elite::Vector2(m_WorldWidth / 1.5f, m_WorldHeight / 2));
 	DEBUGRENDERER2D->GetActiveCamera()->SetMoveLocked(false);
@@ -63,12 +69,13 @@ void App_FlowFields::Start()
 		}
 	}
 
+	//set destination node to the middle of the grid
 	m_DestinationNodeIndex = m_AmountOfRows / 2 * m_AmountOfColumns + m_AmountOfColumns / 2;
 }
 
 void App_FlowFields::Update(float deltaTime)
 {
-	//INPUT
+	//Input
 	HandleInput();
 
 	//Update agents
@@ -77,10 +84,13 @@ void App_FlowFields::Update(float deltaTime)
 		agent->Update(deltaTime);
 		agent->TrimToWorld({0.f, 0.f}, {m_WorldWidth, m_WorldHeight});
 
+		//find the index of the node where the agent is in
 		const auto nodeIndex{ m_pGridGraph->GetNodeIdxAtWorldPos(agent->GetPosition()) };
 
+		//if the nodeIndex is invalid continue to the next agent
 		if (nodeIndex == invalid_node_index) continue;
 
+		//determine and set the velocity of the agent
 		switch (m_VectorField[nodeIndex])
 		{
 		case VectorDirection::none:
@@ -124,15 +134,17 @@ void App_FlowFields::Update(float deltaTime)
 	//UI
 	UpdateImGui();
 
+	//check if the amount of agents was changed
 	if (m_AmountOfAgents != m_PreviousAmountOfAgents)
 	{
+		//delete all the agents
 		for (auto pAgent : m_Agents)
 		{
 			SAFE_DELETE(pAgent)
 		}
 		m_Agents.clear();
 
-		//Create the agents
+		//Create new agents
 		Vector2 randomPos{};
 		for (int index{}; index < m_AmountOfAgents; ++index)
 		{
@@ -143,12 +155,12 @@ void App_FlowFields::Update(float deltaTime)
 			randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldWidth));
 			randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldHeight));
 			m_Agents[index]->SetPosition(randomPos);
-			m_Agents[index]->SetRenderBehavior(true);
 		}
 
 		m_PreviousAmountOfAgents = m_AmountOfAgents;
 	}
 
+	//check if the amount of columns or rows or the cellSize has changed
 	if (m_AmountOfColumns != m_PreviousAmountOfColumns || m_AmountOfRows != m_PreviousAmountOfRows || m_CellSize != m_PreviousCellSize)
 	{
 		//delete the existing grid and make a new grid
@@ -160,19 +172,7 @@ void App_FlowFields::Update(float deltaTime)
 		m_PreviousCellSize = m_CellSize;
 
 		//reset all the fields
-		m_CostField.resize(m_AmountOfColumns * m_AmountOfRows);
-		for (int& cost : m_CostField)
-		{
-			cost = 1;
-		}
-
-		m_IntegrationField.resize(m_AmountOfColumns * m_AmountOfRows);
-		for (int& cost : m_IntegrationField)
-		{
-			cost = 1000;
-		}
-
-		m_VectorField.resize(m_AmountOfColumns * m_AmountOfRows);
+		ResetFields();
 
 		//recalculate the IntegrationField and VectorField
 		CalculateIntegrationField();
@@ -182,6 +182,13 @@ void App_FlowFields::Update(float deltaTime)
 		m_WorldWidth = static_cast<float>(m_CellSize) * m_AmountOfColumns;
 		m_WorldHeight = static_cast<float>(m_CellSize) * m_AmountOfRows;
 		DetermineWorldPoints();
+
+		//delete all the walls
+		for (auto& wall : m_Walls)
+		{
+			SAFE_DELETE(wall);
+		}
+		m_Walls.clear();
 	}
 }
 
@@ -227,17 +234,9 @@ void App_FlowFields::Render(float deltaTime) const
 	//Render vectorField
 	if (m_DebugSettings.DrawVectorField)
 	{
-		Vector2 textPos{ 1.f,  5.f };
-
-		for (int rowNr{}; rowNr < m_AmountOfRows; ++rowNr)
+		for (size_t index{}; index < m_VectorField.size(); ++index)
 		{
-			for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
-			{
-				DrawArrow(m_pGridGraph->GetNodeWorldPos(rowNr * m_AmountOfColumns + colNr), m_VectorField[rowNr * m_AmountOfColumns + colNr]);
-				textPos.x += m_CellSize;
-			}
-			textPos.y += m_CellSize;
-			textPos.x = 1.f;
+			DrawArrow(m_pGridGraph->GetNodeWorldPos(index), m_VectorField[index]);
 		}
 	}
 
@@ -307,7 +306,7 @@ void App_FlowFields::UpdateImGui()
 		ImGui::Spacing();
 		ImGui::Spacing();
 
-		ImGui::Text("Flow Fields");
+		ImGui::Text("Flow Field");
 		ImGui::Spacing();
 		ImGui::Spacing();
 
@@ -318,8 +317,8 @@ void App_FlowFields::UpdateImGui()
 		ImGui::Checkbox("VectorField", &m_DebugSettings.DrawVectorField);
 		
 		ImGui::SliderInt("Agents", &m_AmountOfAgents, 0, 2000);
-		ImGui::SliderInt("Columns", &m_AmountOfColumns, 5, 50);
-		ImGui::SliderInt("Rows", &m_AmountOfRows, 5, 50);
+		ImGui::SliderInt("Columns", &m_AmountOfColumns, 15, 50);
+		ImGui::SliderInt("Rows", &m_AmountOfRows, 15, 50);
 		ImGui::SliderInt("CellSize", &m_CellSize, 1, 25);
 
 		//End
@@ -332,9 +331,8 @@ void App_FlowFields::UpdateImGui()
 
 void App_FlowFields::CalculateIntegrationField()
 {
+	//only calculate the integrationField if there is a destination node
 	if (m_DestinationNodeIndex == invalid_node_index) return;
-
-	auto destinationNode{ m_pGridGraph->GetNode(m_DestinationNodeIndex) };
 
 	//set the cost of all cells to a high number in the integration field
 	for (int& cost : m_IntegrationField)
@@ -353,21 +351,23 @@ void App_FlowFields::CalculateIntegrationField()
 
 	while (!openList.empty())
 	{
-		//Get the next node form the openList
-		int nodeIndex{ openList.front() };
+		//Get the next node from the openList and remove it from the openList
+		const int nodeIndex{ openList.front() };
 		openList.pop_front();
 
-		//Get neighbors of the node
-		auto connections{ m_pGridGraph->GetNodeConnections(nodeIndex) };
+		//Get the connections of the current node
+		const auto& connections{ m_pGridGraph->GetNodeConnections(nodeIndex) };
 
-		//loop over the neighbors
+		//loop over the connection
 		for (const auto& connection : connections)
 		{
+			//get the index of the neighbor
 			const int neighborIndex{ connection->GetTo() };
 
 			//Calculate the new cost of the neighbor node
 			int cost{ m_IntegrationField[nodeIndex] + m_CostField[neighborIndex] };
 			
+			//check if the new cost is cheaper then the current cost of the neighbor
 			if (cost < m_IntegrationField[neighborIndex])
 			{
 				//check if the neighbor is already in the openList if not add it
@@ -411,7 +411,7 @@ void App_FlowFields::CalculateVectorField()
 			}
 		}
 
-		//set the correct direction of the current node
+		//set the correct direction of the current node in the vectorField
 		if (cheapestNeighborIndex != invalid_node_index && cheapestNeighborCost != 1000)
 		{
 			if (cheapestNeighborIndex == index + m_AmountOfColumns)
@@ -459,7 +459,7 @@ void App_FlowFields::CalculateVectorField()
 		m_VectorField[m_DestinationNodeIndex] = VectorDirection::none;
 	}
 
-	for (int index{}; index < m_CostField.size(); ++index)
+	for (size_t index{}; index < m_CostField.size(); ++index)
 	{
 		if (m_CostField[index] == 255)
 		{
@@ -488,7 +488,7 @@ void App_FlowFields::HandleInput()
 			CalculateIntegrationField();
 			CalculateVectorField();
 		}
-		else
+		else //if the costField is not drawn then add a wall when clicking on a cell
 		{
 			m_CostField[indexclosestNode] = 255;
 		}
@@ -497,6 +497,9 @@ void App_FlowFields::HandleInput()
 		{
 			m_pGridGraph->RemoveConnectionsToAdjacentNodes(indexclosestNode);
 			AddWall(m_pGridGraph->GetNodeWorldPos(indexclosestNode));
+
+			CalculateIntegrationField();
+			CalculateVectorField();
 		}
 	}
 
@@ -514,20 +517,21 @@ void App_FlowFields::HandleInput()
 		if (m_CostField[indexclosestNode] - 1 > 0 && m_DebugSettings.DrawCostField)
 		{
 			--m_CostField[indexclosestNode];
+
 			CalculateIntegrationField();
 			CalculateVectorField();
 		}
-		else
+		else //when the costField isn't drawn remove the wall if click on a wall
 		{
 			const Vector2 nodePos{ m_pGridGraph->GetNodeWorldPos(indexclosestNode) };
 
 			//loop over the walls and check if the player clicked on a wall if so delete the wall and set the cost to 1
-			for (auto& wall : m_vNavigationColliders)
+			for (auto& wall : m_Walls)
 			{
 				if (wall->GetPosition() == nodePos)
 				{
 					SAFE_DELETE(wall);
-					m_vNavigationColliders.remove(wall);
+					m_Walls.remove(wall);
 					m_CostField[indexclosestNode] = 1;
 					break;
 				}
@@ -536,7 +540,11 @@ void App_FlowFields::HandleInput()
 
 		if (m_CostField[indexclosestNode] <= 254)
 		{
+			//reAdd the connections to the neighbors
 			m_pGridGraph->AddConnectionsToAdjacentCells(indexclosestNode);
+
+			CalculateIntegrationField();
+			CalculateVectorField();
 		}
 	}
 
@@ -552,6 +560,7 @@ void App_FlowFields::HandleInput()
 		if (indexclosestNode == invalid_node_index) return;
 		
 		m_DestinationNodeIndex = indexclosestNode;
+
 		CalculateIntegrationField();
 		CalculateVectorField();
 	}
@@ -560,7 +569,7 @@ void App_FlowFields::HandleInput()
 void App_FlowFields::AddWall(Vector2 pos)
 {
 	bool wallAlreadyExists{ false };
-	for (const auto& wall : m_vNavigationColliders)
+	for (const auto& wall : m_Walls)
 	{
 		if (wall->GetPosition() == pos)
 		{
@@ -570,92 +579,68 @@ void App_FlowFields::AddWall(Vector2 pos)
 
 	if (!wallAlreadyExists)
 	{
-		m_vNavigationColliders.push_back(new NavigationColliderElement(pos, static_cast<float>(m_CellSize), static_cast<float>(m_CellSize)));
+		m_Walls.push_back(new NavigationColliderElement(pos, static_cast<float>(m_CellSize), static_cast<float>(m_CellSize)));
 	}
 }
 
 void App_FlowFields::DrawArrow(Vector2 cellMiddle, VectorDirection direction) const
 {
-	Vector2 arrowDirection{};
 	std::vector<Vector2> triangleVertices{};
 	Vector2 triangleStartPoint{};
 	const float triangleSideLenght{ m_CellSize / 4.f };
 
+	//calculate the correct point for the arrow
 	switch (direction)
 	{
 	case VectorDirection::none:
 		return;
 
 	case VectorDirection::top:
-		arrowDirection = { 0.f, 1.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght / 2.f, triangleStartPoint.y));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x, triangleStartPoint.y + triangleSideLenght));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght / 2.f, cellMiddle.y));
+		triangleVertices.push_back(Vector2(cellMiddle.x, cellMiddle.y + triangleSideLenght));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght / 2.f, cellMiddle.y));
 		break;
 
 	case VectorDirection::topRight:
-		arrowDirection = { 1.f, 1.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght / 2.f, triangleStartPoint.y + triangleSideLenght / 2.f));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght, triangleStartPoint.y + triangleSideLenght));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y - triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght / 2.f, cellMiddle.y + triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght, cellMiddle.y + triangleSideLenght));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght / 2.f, cellMiddle.y - triangleSideLenght / 2.f));
 		break;
 
 	case VectorDirection::right:
-		arrowDirection = { 1.f, 0.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x, triangleStartPoint.y + triangleSideLenght / 2.f));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght, triangleStartPoint.y));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x, triangleStartPoint.y - triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x, cellMiddle.y + triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght, cellMiddle.y));
+		triangleVertices.push_back(Vector2(cellMiddle.x, cellMiddle.y - triangleSideLenght / 2.f));
 		break;
 
 	case VectorDirection::bottomRight:
-		arrowDirection = { 1.f, -1.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght / 2.f, triangleStartPoint.y - triangleSideLenght / 2.f));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght, triangleStartPoint.y - triangleSideLenght));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y + triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght / 2.f, cellMiddle.y - triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght, cellMiddle.y - triangleSideLenght));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght / 2.f, cellMiddle.y + triangleSideLenght / 2.f));
 		break;
 
 	case VectorDirection::bottom:
-		arrowDirection = { 0.f, -1.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x, triangleStartPoint.y - triangleSideLenght));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght / 2.f, triangleStartPoint.y));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght / 2.f, cellMiddle.y));
+		triangleVertices.push_back(Vector2(cellMiddle.x, cellMiddle.y - triangleSideLenght));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght / 2.f, cellMiddle.y));
 		break;
 
 	case VectorDirection::bottomLeft:
-		arrowDirection = { -1.f, -1.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght / 2.f, triangleStartPoint.y + triangleSideLenght / 2.f));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght, triangleStartPoint.y - triangleSideLenght));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y - triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght / 2.f, cellMiddle.y + triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght, cellMiddle.y - triangleSideLenght));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght / 2.f, cellMiddle.y - triangleSideLenght / 2.f));
 		break;
 
 	case VectorDirection::Left:
-		arrowDirection = { -1.f, 0.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x, triangleStartPoint.y - triangleSideLenght / 2.f));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght, triangleStartPoint.y));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x, triangleStartPoint.y + triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x, cellMiddle.y - triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght, cellMiddle.y));
+		triangleVertices.push_back(Vector2(cellMiddle.x, cellMiddle.y + triangleSideLenght / 2.f));
 		break;
 
 	case VectorDirection::topLeft:
-		arrowDirection = { -1.f, 1.f };
-		triangleStartPoint.x = cellMiddle.x;
-		triangleStartPoint.y = cellMiddle.y;
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght / 2.f, triangleStartPoint.y - triangleSideLenght / 2.f));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x - triangleSideLenght, triangleStartPoint.y + triangleSideLenght));
-		triangleVertices.push_back(Vector2(triangleStartPoint.x + triangleSideLenght / 2.f, triangleStartPoint.y + triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght / 2.f, cellMiddle.y - triangleSideLenght / 2.f));
+		triangleVertices.push_back(Vector2(cellMiddle.x - triangleSideLenght, cellMiddle.y + triangleSideLenght));
+		triangleVertices.push_back(Vector2(cellMiddle.x + triangleSideLenght / 2.f, cellMiddle.y + triangleSideLenght / 2.f));
 		break;
 	}
 	
@@ -669,4 +654,21 @@ void App_FlowFields::DetermineWorldPoints()
 	m_WorldPoints.push_back({ 0.f, m_WorldHeight });
 	m_WorldPoints.push_back({ m_WorldWidth, m_WorldHeight });
 	m_WorldPoints.push_back({ m_WorldWidth, 0.f });
+}
+
+void App_FlowFields::ResetFields()
+{
+	m_CostField.resize(m_AmountOfColumns * m_AmountOfRows);
+	for (int& cost : m_CostField)
+	{
+		cost = 1;
+	}
+
+	m_IntegrationField.resize(m_AmountOfColumns * m_AmountOfRows);
+	for (int& cost : m_IntegrationField)
+	{
+		cost = 1000;
+	}
+
+	m_VectorField.resize(m_AmountOfColumns * m_AmountOfRows);
 }
