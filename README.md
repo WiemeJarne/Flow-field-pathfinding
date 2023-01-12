@@ -17,7 +17,7 @@ The cost field represents various obstacles on the grid, such as walls or diffic
 4. Find the neighbors of the current node. If a neighbor is a wall, ignore it.
 5. For each of the remaining neighbors, calculate their new cost. If the new cost is lower than the current cost, check if the neighbor is already on the open list. If it is not, add it to the open list and set its cost to the new calculated cost.<br>
 
-![Screenshot 2023-01-12 153629](https://user-images.githubusercontent.com/94701784/212096376-78e60718-e7cf-40b9-98ec-c18b4cd94826.png)
+![Screenshot 2023-01-12 155831](https://user-images.githubusercontent.com/94701784/212100992-87559aef-a10f-467a-9589-ce14ddb7611f.png)
 ### 3. Generate the flow field
 Loop over all the cells in the field and determining the cheapest neighbor by looking at the integration field. If a cell is unreachable, it is assigned a zero vector.<br>
 
