@@ -171,6 +171,9 @@ void App_FlowFields::Update(float deltaTime)
 		m_PreviousAmountOfRows = m_AmountOfRows;
 		m_PreviousCellSize = m_CellSize;
 
+		//set the goal to the middle of the grid to avoid a crash
+		m_DestinationNodeIndex = m_AmountOfRows / 2 * m_AmountOfColumns + m_AmountOfColumns / 2;
+
 		//reset all the fields
 		ResetFields();
 
