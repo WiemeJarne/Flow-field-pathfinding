@@ -21,7 +21,7 @@ public:
 	void Render(float deltaTime) const override;
 
 private:
-	std::list<NavigationColliderElement*> m_Walls;
+	std::list<NavigationColliderElement*> m_lWalls;
 
 	//World datamembers
 	std::vector<Vector2> m_WorldPoints;
@@ -36,8 +36,8 @@ private:
 	int m_CellSize = 10;
 	int m_PreviousCellSize;
 	Elite::GridGraph<Elite::GridTerrainNode, Elite::GraphConnection>* m_pGridGraph;
-	std::vector<int> m_CostField;
-	std::vector<int> m_IntegrationField;
+	std::vector<int> m_vCostField;
+	std::vector<int> m_vIntegrationField;
 
 	enum class VectorDirection
 	{

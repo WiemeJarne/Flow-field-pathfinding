@@ -15,11 +15,11 @@ App_FlowFields::~App_FlowFields()
 	}
 	m_vAgents.clear();
 
-	for (auto& pWall : m_Walls)
+	for (auto& pWall : m_lWalls)
 	{
 		SAFE_DELETE(pWall);
 	}
-	m_Walls.clear();
+	m_lWalls.clear();
 
 	SAFE_DELETE(m_pGridGraph);
 	SAFE_DELETE(m_pGraphRenderer);
@@ -63,8 +63,8 @@ void App_FlowFields::Start()
 	{
 		for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 		{
-			m_CostField.push_back(1);
-			m_IntegrationField.push_back(1000);
+			m_vCostField.push_back(1);
+			m_vIntegrationField.push_back(1000);
 			m_vVectorField.push_back(VectorDirection::none);
 		}
 	}
@@ -184,11 +184,11 @@ void App_FlowFields::Update(float deltaTime)
 		DetermineWorldPoints();
 
 		//delete all the walls
-		for (auto& wall : m_Walls)
+		for (auto& wall : m_lWalls)
 		{
 			SAFE_DELETE(wall);
 		}
-		m_Walls.clear();
+		m_lWalls.clear();
 	}
 }
 
@@ -206,7 +206,7 @@ void App_FlowFields::Render(float deltaTime) const
 		{
 			for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 			{
-				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_CostField[rowNr * m_AmountOfColumns + colNr]).c_str());
+				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_vCostField[rowNr * m_AmountOfColumns + colNr]).c_str());
 				textPos.x += m_CellSize;
 			}
 			textPos.y += m_CellSize;
@@ -223,7 +223,7 @@ void App_FlowFields::Render(float deltaTime) const
 		{
 			for (int colNr{}; colNr < m_AmountOfColumns; ++colNr)
 			{
-				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_IntegrationField[rowNr * m_AmountOfColumns + colNr]).c_str());
+				DEBUGRENDERER2D->DrawString(textPos, std::to_string(m_vIntegrationField[rowNr * m_AmountOfColumns + colNr]).c_str());
 				textPos.x += m_CellSize;
 			}
 			textPos.y += m_CellSize;
@@ -330,7 +330,7 @@ void App_FlowFields::UpdateImGui()
 void App_FlowFields::CalculateIntegrationField()
 {
 	//set the cost of all cells to a high number in the integration field
-	for (int& cost : m_IntegrationField)
+	for (int& cost : m_vIntegrationField)
 	{
 		cost = 1000;
 	}
@@ -344,7 +344,7 @@ void App_FlowFields::CalculateIntegrationField()
 	//set the cost of the destination nodes to 0 and add them to the openList
 	for (const auto& destinationNodeIndex : m_lDestinationNodesIndices)
 	{
-		m_IntegrationField[destinationNodeIndex] = 0;
+		m_vIntegrationField[destinationNodeIndex] = 0;
 		openList.push_back(destinationNodeIndex);
 	}
 
@@ -366,10 +366,10 @@ void App_FlowFields::CalculateIntegrationField()
 			const int neighborIndex{ connection->GetTo() };
 
 			//Calculate the new cost of the neighbor node
-			int cost{ m_IntegrationField[nodeIndex] + m_CostField[neighborIndex] };
+			int cost{ m_vIntegrationField[nodeIndex] + m_vCostField[neighborIndex] };
 			
 			//check if the new cost is cheaper then the current cost of the neighbor
-			if (cost < m_IntegrationField[neighborIndex])
+			if (cost < m_vIntegrationField[neighborIndex])
 			{
 				//check if the neighbor is already in the openList if not add it
 				bool neighborIsInOpenList{ false };
@@ -388,7 +388,7 @@ void App_FlowFields::CalculateIntegrationField()
 				}
 
 				//Set the cost of the neighbor
-				m_IntegrationField[neighborIndex] = cost;
+				m_vIntegrationField[neighborIndex] = cost;
 			}
 		}
 	}
@@ -397,7 +397,7 @@ void App_FlowFields::CalculateIntegrationField()
 void App_FlowFields::CalculateVectorField()
 {
 	//loop over all the nodes in the integrationField
-	for (size_t index{}; index < m_IntegrationField.size(); ++index)
+	for (size_t index{}; index < m_vIntegrationField.size(); ++index)
 	{
 		//if there are no destination nodes set the vectors of all cells to none
 		if (m_lDestinationNodesIndices.empty())
@@ -414,10 +414,10 @@ void App_FlowFields::CalculateVectorField()
 		const auto& connections{ m_pGridGraph->GetNodeConnections(index) };
 		for (const auto& connection : connections)
 		{
-			if (m_IntegrationField[connection->GetTo()] < cheapestNeighborCost)
+			if (m_vIntegrationField[connection->GetTo()] < cheapestNeighborCost)
 			{
 				cheapestNeighborIndex = connection->GetTo();
-				cheapestNeighborCost = m_IntegrationField[cheapestNeighborIndex];
+				cheapestNeighborCost = m_vIntegrationField[cheapestNeighborIndex];
 			}
 		}
 
@@ -469,9 +469,9 @@ void App_FlowFields::CalculateVectorField()
 		m_vVectorField[destinationNodeIndex] = VectorDirection::none;
 	}
 
-	for (size_t index{}; index < m_CostField.size(); ++index)
+	for (size_t index{}; index < m_vCostField.size(); ++index)
 	{
-		if (m_CostField[index] == 255)
+		if (m_vCostField[index] == 255)
 		{
 			m_vVectorField[index] = VectorDirection::none;
 		}
@@ -491,19 +491,19 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 
-		if (m_CostField[indexclosestNode] + 1 < 256 && m_DebugSettings.DrawCostField == true)
+		if (m_vCostField[indexclosestNode] + 1 < 256 && m_DebugSettings.DrawCostField == true)
 		{
-			++m_CostField[indexclosestNode];
+			++m_vCostField[indexclosestNode];
 			
 			CalculateIntegrationField();
 			CalculateVectorField();
 		}
 		else //if the costField is not drawn then add a wall when clicking on a cell
 		{
-			m_CostField[indexclosestNode] = 255;
+			m_vCostField[indexclosestNode] = 255;
 		}
 
-		if (m_CostField[indexclosestNode] == 255)
+		if (m_vCostField[indexclosestNode] == 255)
 		{
 			m_pGridGraph->RemoveConnectionsToAdjacentNodes(indexclosestNode);
 			AddWall(m_pGridGraph->GetNodeWorldPos(indexclosestNode));
@@ -524,9 +524,9 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 
-		if (m_CostField[indexclosestNode] - 1 > 0 && m_DebugSettings.DrawCostField)
+		if (m_vCostField[indexclosestNode] - 1 > 0 && m_DebugSettings.DrawCostField)
 		{
-			--m_CostField[indexclosestNode];
+			--m_vCostField[indexclosestNode];
 
 			CalculateIntegrationField();
 			CalculateVectorField();
@@ -536,22 +536,29 @@ void App_FlowFields::HandleInput()
 			const Vector2 nodePos{ m_pGridGraph->GetNodeWorldPos(indexclosestNode) };
 
 			//loop over the walls and check if the player clicked on a wall if so delete the wall and set the cost to 1
-			for (auto& wall : m_Walls)
+			for (auto& wall : m_lWalls)
 			{
 				if (wall->GetPosition() == nodePos)
 				{
 					SAFE_DELETE(wall);
-					m_Walls.remove(wall);
-					m_CostField[indexclosestNode] = 1;
+					m_lWalls.remove(wall);
+					m_vCostField[indexclosestNode] = 1;
 					break;
 				}
 			}
 		}
 
-		if (m_CostField[indexclosestNode] <= 254)
+		if (m_vCostField[indexclosestNode] <= 254)
 		{
-			//reAdd the connections to the neighbors
+			//add the connections to the neighbors
 			m_pGridGraph->AddConnectionsToAdjacentCells(indexclosestNode);
+
+			//loop over all the cells to delete their connections if the cell is a wall
+			for (int index{}; index < m_pGridGraph->GetAllNodes().size(); ++index)
+			{
+				if (m_vCostField[index] == 255)
+					m_pGridGraph->RemoveConnectionsToAdjacentNodes(index);
+			}
 
 			CalculateIntegrationField();
 			CalculateVectorField();
@@ -594,7 +601,7 @@ void App_FlowFields::HandleInput()
 void App_FlowFields::AddWall(Vector2 pos)
 {
 	bool wallAlreadyExists{ false };
-	for (const auto& wall : m_Walls)
+	for (const auto& wall : m_lWalls)
 	{
 		if (wall->GetPosition() == pos)
 		{
@@ -604,7 +611,7 @@ void App_FlowFields::AddWall(Vector2 pos)
 
 	if (!wallAlreadyExists)
 	{
-		m_Walls.push_back(new NavigationColliderElement(pos, static_cast<float>(m_CellSize), static_cast<float>(m_CellSize)));
+		m_lWalls.push_back(new NavigationColliderElement(pos, static_cast<float>(m_CellSize), static_cast<float>(m_CellSize)));
 	}
 }
 
@@ -683,14 +690,14 @@ void App_FlowFields::DetermineWorldPoints()
 
 void App_FlowFields::ResetFields()
 {
-	m_CostField.resize(m_AmountOfColumns * m_AmountOfRows);
-	for (int& cost : m_CostField)
+	m_vCostField.resize(m_AmountOfColumns * m_AmountOfRows);
+	for (int& cost : m_vCostField)
 	{
 		cost = 1;
 	}
 
-	m_IntegrationField.resize(m_AmountOfColumns * m_AmountOfRows);
-	for (int& cost : m_IntegrationField)
+	m_vIntegrationField.resize(m_AmountOfColumns * m_AmountOfRows);
+	for (int& cost : m_vIntegrationField)
 	{
 		cost = 1000;
 	}
