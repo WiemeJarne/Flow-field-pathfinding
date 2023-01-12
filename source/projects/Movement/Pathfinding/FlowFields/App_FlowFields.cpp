@@ -552,7 +552,8 @@ void App_FlowFields::HandleInput()
 			m_pGridGraph->AddConnectionsToAdjacentCells(indexclosestNode);
 
 			//loop over all the cells to delete their connections if the cell is a wall
-			for (int index{}; index < m_pGridGraph->GetAllNodes().size(); ++index)
+			const int amountOfNodex{ static_cast<int>(m_pGridGraph->GetAllNodes().size()) };
+			for (int index{}; index < amountOfNodex; ++index)
 			{
 				if (m_vCostField[index] == 255)
 				{
