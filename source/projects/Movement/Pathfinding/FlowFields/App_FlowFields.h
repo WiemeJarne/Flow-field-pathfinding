@@ -52,15 +52,15 @@ private:
 		topLeft
 	};
 
-	std::vector<VectorDirection> m_VectorField;
+	std::vector<VectorDirection> m_vVectorField;
 
 	bool m_AddWalls{ false };
 
-	int m_DestinationNodeIndex{ invalid_node_index };
+	std::list<int> m_lDestinationNodesIndices{};
 
 	int m_AmountOfAgents = 100;
 	int m_PreviousAmountOfAgents;
-	std::vector<SteeringAgent*> m_Agents;
+	std::vector<SteeringAgent*> m_vAgents;
 	
 	//Visualisation
 	Elite::GraphRenderer* m_pGraphRenderer{ nullptr };
@@ -93,4 +93,3 @@ private:
 	App_FlowFields(const App_FlowFields&) = delete;
 	App_FlowFields& operator=(const App_FlowFields&) = delete;
 };
-

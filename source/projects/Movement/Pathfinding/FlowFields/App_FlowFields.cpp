@@ -9,11 +9,11 @@
 //Destructor
 App_FlowFields::~App_FlowFields()
 {
-	for (auto& pAgent : m_Agents)
+	for (auto& pAgent : m_vAgents)
 	{
 		SAFE_DELETE(pAgent)
 	}
-	m_Agents.clear();
+	m_vAgents.clear();
 
 	for (auto& pWall : m_Walls)
 	{
@@ -39,10 +39,10 @@ void App_FlowFields::Start()
 	Vector2 randomPos{};
 	for (int index{}; index < m_AmountOfAgents; ++index)
 	{
-		m_Agents.push_back(new SteeringAgent());
-		m_Agents[index]->SetMaxLinearSpeed(25.f);
-		m_Agents[index]->SetMass(0.f);
-		m_Agents[index]->SetAutoOrient(true);
+		m_vAgents.push_back(new SteeringAgent());
+		m_vAgents[index]->SetMaxLinearSpeed(25.f);
+		m_vAgents[index]->SetMass(0.f);
+		m_vAgents[index]->SetAutoOrient(true);
 		randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldWidth));
 		randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldHeight));
 	}
@@ -65,12 +65,9 @@ void App_FlowFields::Start()
 		{
 			m_CostField.push_back(1);
 			m_IntegrationField.push_back(1000);
-			m_VectorField.push_back(VectorDirection::none);
+			m_vVectorField.push_back(VectorDirection::none);
 		}
 	}
-
-	//set destination node to the middle of the grid
-	m_DestinationNodeIndex = m_AmountOfRows / 2 * m_AmountOfColumns + m_AmountOfColumns / 2;
 }
 
 void App_FlowFields::Update(float deltaTime)
@@ -79,7 +76,7 @@ void App_FlowFields::Update(float deltaTime)
 	HandleInput();
 
 	//Update agents
-	for (const auto& agent : m_Agents)
+	for (const auto& agent : m_vAgents)
 	{
 		agent->Update(deltaTime);
 		agent->TrimToWorld({0.f, 0.f}, {m_WorldWidth, m_WorldHeight});
@@ -91,7 +88,7 @@ void App_FlowFields::Update(float deltaTime)
 		if (nodeIndex == invalid_node_index) continue;
 
 		//determine and set the velocity of the agent
-		switch (m_VectorField[nodeIndex])
+		switch (m_vVectorField[nodeIndex])
 		{
 		case VectorDirection::none:
 			agent->SetLinearVelocity(Vector2(0.f, 0.f) * agent->GetMaxLinearSpeed());
@@ -138,23 +135,23 @@ void App_FlowFields::Update(float deltaTime)
 	if (m_AmountOfAgents != m_PreviousAmountOfAgents)
 	{
 		//delete all the agents
-		for (auto pAgent : m_Agents)
+		for (auto pAgent : m_vAgents)
 		{
 			SAFE_DELETE(pAgent)
 		}
-		m_Agents.clear();
+		m_vAgents.clear();
 
 		//Create new agents
 		Vector2 randomPos{};
 		for (int index{}; index < m_AmountOfAgents; ++index)
 		{
-			m_Agents.push_back(new SteeringAgent());
-			m_Agents[index]->SetMaxLinearSpeed(15.f);
-			m_Agents[index]->SetMass(0.f);
-			m_Agents[index]->SetAutoOrient(true);
+			m_vAgents.push_back(new SteeringAgent());
+			m_vAgents[index]->SetMaxLinearSpeed(15.f);
+			m_vAgents[index]->SetMass(0.f);
+			m_vAgents[index]->SetAutoOrient(true);
 			randomPos.x = static_cast<float>(rand() % static_cast<int>(m_WorldWidth));
 			randomPos.y = static_cast<float>(rand() % static_cast<int>(m_WorldHeight));
-			m_Agents[index]->SetPosition(randomPos);
+			m_vAgents[index]->SetPosition(randomPos);
 		}
 
 		m_PreviousAmountOfAgents = m_AmountOfAgents;
@@ -171,8 +168,8 @@ void App_FlowFields::Update(float deltaTime)
 		m_PreviousAmountOfRows = m_AmountOfRows;
 		m_PreviousCellSize = m_CellSize;
 
-		//set the goal to the middle of the grid to avoid a crash
-		m_DestinationNodeIndex = m_AmountOfRows / 2 * m_AmountOfColumns + m_AmountOfColumns / 2;
+		//clear the m_vDestinationNodesIndices vector to avoid a crash
+		m_lDestinationNodesIndices.clear();
 
 		//reset all the fields
 		ResetFields();
@@ -237,16 +234,16 @@ void App_FlowFields::Render(float deltaTime) const
 	//Render vectorField
 	if (m_DebugSettings.DrawVectorField)
 	{
-		for (size_t index{}; index < m_VectorField.size(); ++index)
+		for (size_t index{}; index < m_vVectorField.size(); ++index)
 		{
-			DrawArrow(m_pGridGraph->GetNodeWorldPos(index), m_VectorField[index]);
+			DrawArrow(m_pGridGraph->GetNodeWorldPos(index), m_vVectorField[index]);
 		}
 	}
 
-	//Render destination node on top if applicable
-	if (m_DestinationNodeIndex != invalid_node_index)
+	//Render destination nodes on top if applicable
+	for (const auto& destinationNodeIndex : m_lDestinationNodesIndices)
 	{
-		m_pGraphRenderer->HighlightNodes(m_pGridGraph, { m_pGridGraph->GetNode(m_DestinationNodeIndex) }, START_NODE_COLOR);
+		m_pGraphRenderer->HighlightNodes(m_pGridGraph, { m_pGridGraph->GetNode(destinationNodeIndex) }, START_NODE_COLOR);
 	}
 
 	//Render world bounds
@@ -264,7 +261,7 @@ void App_FlowFields::UpdateImGui()
 #pragma region UI
 	{
 		//Setup
-		int menuWidth{ 150 };
+		int menuWidth{ 170 };
 		int const width = DEBUGRENDERER2D->GetActiveCamera()->GetWidth();
 		int const height = DEBUGRENDERER2D->GetActiveCamera()->GetHeight();
 		bool windowActive{ true };
@@ -291,7 +288,7 @@ void App_FlowFields::UpdateImGui()
 			ImGui::Text("RMB: remove wall");
 		}
 
-		ImGui::Text("MMB: set destination");		
+		ImGui::Text("MMB: set destination/\nremove destination");		
 
 		ImGui::Spacing();
 		ImGui::Separator();
@@ -299,10 +296,8 @@ void App_FlowFields::UpdateImGui()
 		ImGui::Spacing();
 
 		ImGui::Text("STATS");
-		ImGui::Indent();
 		ImGui::Text("%.3f ms/frame", 1000.f, ImGui::GetIO().Framerate);
 		ImGui::Text("%.01f FPS", ImGui::GetIO().Framerate);
-		ImGui::Unindent();
 
 		ImGui::Spacing();
 		ImGui::Separator();
@@ -334,29 +329,32 @@ void App_FlowFields::UpdateImGui()
 
 void App_FlowFields::CalculateIntegrationField()
 {
-	//only calculate the integrationField if there is a destination node
-	if (m_DestinationNodeIndex == invalid_node_index) return;
-
 	//set the cost of all cells to a high number in the integration field
 	for (int& cost : m_IntegrationField)
 	{
 		cost = 1000;
 	}
 
+	//if there are no destination nodes don't calculate the integrationField
+	if (m_lDestinationNodesIndices.empty()) return;
+
 	//create the openList
 	std::deque<int> openList{};
 
-	//set the cost of the destination node cost to 0
-	m_IntegrationField[m_DestinationNodeIndex] = 0;
-
-	//add the destinationNode to the openList
-	openList.push_back(m_DestinationNodeIndex);
+	//set the cost of the destination nodes to 0 and add them to the openList
+	for (const auto& destinationNodeIndex : m_lDestinationNodesIndices)
+	{
+		m_IntegrationField[destinationNodeIndex] = 0;
+		openList.push_back(destinationNodeIndex);
+	}
 
 	while (!openList.empty())
 	{
 		//Get the next node from the openList and remove it from the openList
 		const int nodeIndex{ openList.front() };
 		openList.pop_front();
+
+		
 
 		//Get the connections of the current node
 		const auto& connections{ m_pGridGraph->GetNodeConnections(nodeIndex) };
@@ -401,6 +399,15 @@ void App_FlowFields::CalculateVectorField()
 	//loop over all the nodes in the integrationField
 	for (size_t index{}; index < m_IntegrationField.size(); ++index)
 	{
+		//if there are no destination nodes set the vectors of all cells to none
+		if (m_lDestinationNodesIndices.empty())
+		{
+			for (auto& direction : m_vVectorField)
+			{
+				direction = VectorDirection::none;
+			}
+		}
+
 		//loop over the neighbors of the current node an find the cheapest neighbor
 		int cheapestNeighborIndex{ invalid_node_index };
 		int cheapestNeighborCost{ 1000 };
@@ -419,54 +426,54 @@ void App_FlowFields::CalculateVectorField()
 		{
 			if (cheapestNeighborIndex == index + m_AmountOfColumns)
 			{
-				m_VectorField[index] = VectorDirection::top;
+				m_vVectorField[index] = VectorDirection::top;
 			}
 			else if (cheapestNeighborIndex == index + m_AmountOfColumns + 1)
 			{
-				m_VectorField[index] = VectorDirection::topRight;
+				m_vVectorField[index] = VectorDirection::topRight;
 			}
 			else if (cheapestNeighborIndex == index + 1)
 			{
-				m_VectorField[index] = VectorDirection::right;
+				m_vVectorField[index] = VectorDirection::right;
 			}
 			else if (cheapestNeighborIndex == index - m_AmountOfColumns + 1)
 			{
-				m_VectorField[index] = VectorDirection::bottomRight;
+				m_vVectorField[index] = VectorDirection::bottomRight;
 			}
 			else if (cheapestNeighborIndex == index - m_AmountOfColumns)
 			{
-				m_VectorField[index] = VectorDirection::bottom;
+				m_vVectorField[index] = VectorDirection::bottom;
 			}
 			else if (cheapestNeighborIndex == index - m_AmountOfColumns - 1)
 			{
-				m_VectorField[index] = VectorDirection::bottomLeft;
+				m_vVectorField[index] = VectorDirection::bottomLeft;
 			}
 			else if (cheapestNeighborIndex == index - 1)
 			{
-				m_VectorField[index] = VectorDirection::Left;
+				m_vVectorField[index] = VectorDirection::Left;
 			}
 			else if (cheapestNeighborIndex == index + m_AmountOfColumns - 1)
 			{
-				m_VectorField[index] = VectorDirection::topLeft;
+				m_vVectorField[index] = VectorDirection::topLeft;
 			}
 			else
 			{
-				m_VectorField[index] = VectorDirection::none;
+				m_vVectorField[index] = VectorDirection::none;
 			}
 		}
 	}
 
-	//set the direction of the destination node and all the walls to zero
-	if (m_DestinationNodeIndex != invalid_node_index)
+	//set the direction of the destination nodes and all the walls to zero
+	for (const auto& destinationNodeIndex : m_lDestinationNodesIndices)
 	{
-		m_VectorField[m_DestinationNodeIndex] = VectorDirection::none;
+		m_vVectorField[destinationNodeIndex] = VectorDirection::none;
 	}
 
 	for (size_t index{}; index < m_CostField.size(); ++index)
 	{
 		if (m_CostField[index] == 255)
 		{
-			m_VectorField[index] = VectorDirection::none;
+			m_vVectorField[index] = VectorDirection::none;
 		}
 	}
 }
@@ -562,7 +569,22 @@ void App_FlowFields::HandleInput()
 
 		if (indexclosestNode == invalid_node_index) return;
 		
-		m_DestinationNodeIndex = indexclosestNode;
+		//check if this index already is in the m_vDestinationNodesIndices if so remove it if not add it
+		bool nodeIsAlreadyDestination{};
+		for (const auto& destinationNodeIndex : m_lDestinationNodesIndices)
+		{
+			if (destinationNodeIndex == indexclosestNode)
+			{
+				m_lDestinationNodesIndices.remove(destinationNodeIndex);
+				nodeIsAlreadyDestination = true;
+				break;
+			}
+		}
+
+		if (!nodeIsAlreadyDestination)
+		{
+			m_lDestinationNodesIndices.push_back(indexclosestNode);
+		}
 
 		CalculateIntegrationField();
 		CalculateVectorField();
@@ -673,5 +695,5 @@ void App_FlowFields::ResetFields()
 		cost = 1000;
 	}
 
-	m_VectorField.resize(m_AmountOfColumns * m_AmountOfRows);
+	m_vVectorField.resize(m_AmountOfColumns * m_AmountOfRows);
 }
