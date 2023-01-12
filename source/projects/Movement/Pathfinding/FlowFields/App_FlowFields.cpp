@@ -354,8 +354,6 @@ void App_FlowFields::CalculateIntegrationField()
 		const int nodeIndex{ openList.front() };
 		openList.pop_front();
 
-		
-
 		//Get the connections of the current node
 		const auto& connections{ m_pGridGraph->GetNodeConnections(nodeIndex) };
 
@@ -557,7 +555,10 @@ void App_FlowFields::HandleInput()
 			for (int index{}; index < m_pGridGraph->GetAllNodes().size(); ++index)
 			{
 				if (m_vCostField[index] == 255)
+				{
 					m_pGridGraph->RemoveConnectionsToAdjacentNodes(index);
+					continue;
+				}
 			}
 
 			CalculateIntegrationField();
